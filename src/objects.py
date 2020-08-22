@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Type
 import abc
 import dataclasses
+import inspect
+import typing
 
 
 class ChatType(Enum):
@@ -13,14 +15,33 @@ class ChatType(Enum):
 
 
 class AbstractObject(abc.ABC):
+    abstract_object_field_types_by_name: Dict[str, Type['AbstractObject']] = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if issubclass(cls, AbstractObject):
+            resolved_hints = typing.get_type_hints(cls)
+            cls.abstract_object_field_types_by_name = {name: klass for name, klass in resolved_hints.items()
+                                                       if inspect.isclass(klass) and issubclass(klass, AbstractObject)}
+
     @abc.abstractmethod
     def to_dict(self) -> Dict:
         raise NotImplementedError
 
     @classmethod
-    @abc.abstractmethod
     def from_dict(cls, data: Dict) -> 'AbstractObject':
-        raise NotImplementedError
+        cls._pre_from_dict_setup(data)
+        instance = cls(**data)
+        for field in dataclasses.fields(instance):
+            if field.name in cls.abstract_object_field_types_by_name:
+                raw_field_value = getattr(instance, field.name)
+                field_value = cls.abstract_object_field_types_by_name[field.name].from_dict(raw_field_value)
+                setattr(instance, field.name, field_value)
+        return instance
+
+    @classmethod
+    def _pre_from_dict_setup(cls, data: Dict) -> None:
+        pass
 
 
 @dataclass
@@ -32,13 +53,10 @@ class User(AbstractObject):
     is_bot: bool
     first_name: str
     last_name: str = None
+    language_code: str = None
 
     def to_dict(self) -> Dict:
         return dataclasses.asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: Dict) -> 'User':
-        return cls(**data)
 
 
 @dataclass
@@ -59,10 +77,6 @@ class Chat(AbstractObject):
         data['type'] = data['type'].value
         return data
 
-    @classmethod
-    def from_dict(cls, data: Dict) -> 'Chat':
-        return cls(**data)
-
 
 @dataclass
 class MessageEntity(AbstractObject):
@@ -78,10 +92,6 @@ class MessageEntity(AbstractObject):
 
     def to_dict(self) -> Dict:
         return dataclasses.asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: Dict) -> 'MessageEntity':
-        return cls(**data)
 
 
 @dataclass
@@ -103,15 +113,14 @@ class Message(AbstractObject):
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'Message':
+    def _pre_from_dict_setup(cls, data: Dict) -> None:
+        data['from_user'] = data.pop('from')
         try:
-            user = data.pop('from_user')
+            entities = data['entities']
         except KeyError:
-            try:
-                user = data.pop('user')
-            except KeyError:
-                user = data.pop('from')
-        return cls(from_user=user, **data)
+            pass
+        else:
+            data['entities'] = [MessageEntity(**entity) for entity in entities]
 
 
 @dataclass
@@ -124,12 +133,6 @@ class Update(AbstractObject):
 
     def to_dict(self) -> Dict:
         return dataclasses.asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: Dict) -> 'AbstractObject':
-        message = data['message']
-        message['from_user'] = message.pop('from')
-        return cls(**data)
 
 
 if __name__ == '__main__':
