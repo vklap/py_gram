@@ -1,7 +1,8 @@
+from pprint import pprint
 from typing import Dict, Union, List
 import abc
 import asyncio
-from pprint import pprint
+import atexit
 
 import httpx
 
@@ -10,23 +11,43 @@ from src import objects
 # https://core.telegram.org/bots/api
 
 
-class AbstractTelegramClient:
+class AbstractTelegramClient(abc.ABC):
+    SENTINEL = object()
     BASE_URL_FORMAT = 'https://api.telegram.org/bot{token}'
 
     def __init__(self):
-        self.updates_queue = asyncio.Queue()
+        atexit.register(self.handle_exit)
+        self.queue = asyncio.Queue()
+        self.loop = asyncio.get_event_loop()
+        self.event = asyncio.Event()
+        self.listen_task = None
+
+    def handle_exit(self):
+        task = self.loop.create_task(self.queue.put(self.SENTINEL))
+        self.loop.run_until_complete(task)
+        pending = asyncio.all_tasks(loop=self.loop)
+        for task in pending:
+            task.cancel()
+        group = asyncio.gather(*pending, loop=self.loop, return_exceptions=True)
+        self.loop.run_until_complete(group)
+        self.loop.close()
+
+    def start_listening_for_updates(self):
+        asyncio.run(self.start_updates_worker())
 
     async def start_updates_worker(self):
         update = None
-        self.updates_queue.put_nowait(None)
+        self.queue.put_nowait(None)
         while True:
-            update_id = await self.updates_queue.get()
+            update_id = await self.queue.get()
+            if update_id == self.SENTINEL:
+                break
             updates = await self.get_updates(update_id)
             for update in updates:
                 await self._receive_update(update)
             update_id = update.update_id + 1 if update else None
-            self.updates_queue.task_done()
-            self.updates_queue.put_nowait(update_id)
+            self.queue.task_done()
+            self.queue.put_nowait(update_id)
 
     @property
     @abc.abstractmethod
@@ -93,6 +114,7 @@ if __name__ == '__main__':
     BOT_TOKEN = os.getenv('BOT_TOKEN')
     # print(BOT_TOKEN)
     client = TelegramClient(BOT_TOKEN)
-    asyncio.run(client.get_me())
-    asyncio.run(client.start_updates_worker())
+    # asyncio.run(client.get_me())
+    # asyncio.run(client.start_updates_worker())
+    client.start_listening_for_updates()
     print('finished')
