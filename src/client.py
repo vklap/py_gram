@@ -60,9 +60,19 @@ class AbstractTelegramClient(abc.ABC):
 
     async def get_me(self) -> Dict:
         url = f'{self._base_url}/getMe'
-        data = await self._execute_get(url)
-        pprint(data)
-        return data
+        return await self._execute_get(url)
+
+    async def send_message(self, chat_id: Union[int, str], text: str) -> objects.Message:
+        url = f'{self._base_url}/sendMessage'
+        data = {
+            'chat_id': chat_id,
+            'text': text,
+        }
+        result = await self._execute_post(url, data)
+        if result['ok'] is True:
+            return objects.Message.from_dict(result['result'])
+        else:
+            raise Exception()
 
     async def get_updates(self, update_id: int = None) -> List[objects.Update]:
         params = {}
@@ -86,6 +96,13 @@ class AbstractTelegramClient(abc.ABC):
             response.raise_for_status()
         return response.json()
 
+    @classmethod
+    async def _execute_post(cls, url: str, data: Dict = None) -> Dict:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, data=data)
+            response.raise_for_status()
+        return response.json()
+
     async def _receive_update(self, update: objects.Update) -> None:
         asyncio.create_task(self._handle_update(update))
 
@@ -98,23 +115,15 @@ class TelegramClient(AbstractTelegramClient):
     def __init__(self, bot_token):
         super().__init__()
         self._bot_token = bot_token
+        self.responded = False
 
     @property
     def bot_token(self) -> str:
         return self._bot_token
 
     async def _handle_update(self, update: objects.Update) -> None:
-        print(update.update_id, update.message.text)
+        print(update)
+        if not self.responded:
+            self.responded = True
+            await self.send_message(chat_id=update.message.chat.id, text='This is a response!')
 
-
-if __name__ == '__main__':
-    import dotenv
-    import os
-    dotenv.load_dotenv()
-    BOT_TOKEN = os.getenv('BOT_TOKEN')
-    # print(BOT_TOKEN)
-    client = TelegramClient(BOT_TOKEN)
-    # asyncio.run(client.get_me())
-    # asyncio.run(client.start_updates_worker())
-    client.start_listening_for_updates()
-    print('finished')
