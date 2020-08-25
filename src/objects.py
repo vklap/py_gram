@@ -95,12 +95,21 @@ class Message:
         return f'<Message(message_id={self.message_id}, text={self.text}, chat={self.chat}, user={self.from_user})>'
 
 
+class CallbackQuery:
+    """
+    https://core.telegram.org/bots/api#callbackquery
+    """
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'CallbackQuery':
+        pass
+
+
 class Update:
     """
     https://core.telegram.org/bots/api#update
     """
 
-    def __init__(self, update_id: int, message: Message, **kwargs):
+    def __init__(self, update_id: int, message: Message, callback_query: CallbackQuery, **kwargs):
         self.kwargs = kwargs
         self.message = message
         self.update_id = update_id
@@ -109,7 +118,13 @@ class Update:
     def from_dict(cls, data: Dict) -> 'Update':
         message_data = data.pop('message')
         message = Message.from_dict(message_data)
-        return cls(message=message, **data)
+        try:
+            callback_query_data = data['callback_query']
+        except KeyError:
+            pass
+        else:
+            callback_query = CallbackQuery.from_dict(callback_query_data)
+        return cls(message=message, callback_query=callback_query, **data)
 
     def __repr__(self):
         return f'<Update(update_id={self.update_id}, message={self.message})'
