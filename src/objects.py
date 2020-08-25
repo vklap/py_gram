@@ -74,6 +74,7 @@ class Message:
     """
     https://core.telegram.org/bots/api#message
     """
+
     def __init__(self, message_id: int, from_user: User, date: int, chat: Chat, text: str = None, **kwargs):
         self.chat = chat
         self.date = date
@@ -98,6 +99,7 @@ class Update:
     """
     https://core.telegram.org/bots/api#update
     """
+
     def __init__(self, update_id: int, message: Message, **kwargs):
         self.kwargs = kwargs
         self.message = message
@@ -111,3 +113,33 @@ class Update:
 
     def __repr__(self):
         return f'<Update(update_id={self.update_id}, message={self.message})'
+
+
+class InlineKeyboardButton:
+    def __init__(self, text: str, callback_data: str = None, url: str = None):
+        self.url = url
+        self.callback_data = callback_data
+        self.text = text
+
+    def __repr__(self):
+        return f'<InlineKeyboardButton(text={self.text}, callback_data={self.callback_data}, url={self.url})>'
+
+    def to_dict(self) -> Dict:
+        data = {'text': self.text}
+        if self.url:
+            data['url'] = self.url
+        if self.callback_data:
+            data['callback_data'] = self.callback_data
+        return data
+
+
+class InlineKeyboardMarkup:
+    def __init__(self, inline_keyboard: List[InlineKeyboardButton]):
+        self.inline_keyboard = inline_keyboard if inline_keyboard else []
+
+    def __repr__(self):
+        return f'<InlineKeyboardMarkup(inline_keyboard={self.inline_keyboard})>'
+
+    def to_dict(self) -> Dict:
+        return {'inline_keyboard': [[button.to_dict() for button in self.inline_keyboard]]}
+        # return [button.to_dict() for button in self.inline_keyboard]

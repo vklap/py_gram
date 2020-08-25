@@ -1,3 +1,4 @@
+import json
 from pprint import pprint
 from typing import Dict, Union, List
 import abc
@@ -7,6 +8,7 @@ import atexit
 import httpx
 
 from src import objects
+
 
 # https://core.telegram.org/bots/api
 
@@ -62,12 +64,15 @@ class AbstractTelegramClient(abc.ABC):
         url = f'{self._base_url}/getMe'
         return await self._execute_get(url)
 
-    async def send_message(self, chat_id: Union[int, str], text: str) -> objects.Message:
+    async def send_message(self, chat_id: Union[int, str], text: str, reply_markup=None) -> objects.Message:
         url = f'{self._base_url}/sendMessage'
         data = {
             'chat_id': chat_id,
             'text': text,
         }
+        if reply_markup:
+            data['reply_markup'] = json.dumps(reply_markup.to_dict())
+            # data['reply_markup'] = reply_markup.to_dict()
         result = await self._execute_post(url, data)
         if result['ok'] is True:
             return objects.Message.from_dict(result['result'])
@@ -126,4 +131,3 @@ class TelegramClient(AbstractTelegramClient):
         if not self.responded:
             self.responded = True
             await self.send_message(chat_id=update.message.chat.id, text='This is a response!')
-
