@@ -99,9 +99,31 @@ class CallbackQuery:
     """
     https://core.telegram.org/bots/api#callbackquery
     """
+    def __init__(self, id: str, from_user: User, message: Message = None,
+                 inline_message_id: str = None, chat_instance: str = None,
+                 data: str = None, game_short_name: str = None):
+        self.game_short_name = game_short_name
+        self.data = data
+        self.chat_instance = chat_instance
+        self.inline_message_id = inline_message_id
+        self.message = message
+        self.from_user = from_user
+        self.id = id
+
+    def __repr__(self):
+        return f'<CallbackQuery(id={self.id}, data={self.data}, from={self.from_user}, message={self.message})>'
+
     @classmethod
     def from_dict(cls, data: Dict) -> 'CallbackQuery':
-        pass
+        from_user = data.pop('from')
+        user = User.from_dict(from_user)
+        try:
+            message_data = data.pop('message')
+        except KeyError:
+            message = None
+        else:
+            message = Message.from_dict(message_data)
+        return cls(from_user=user, message=message, **data)
 
 
 class Update:
@@ -110,18 +132,24 @@ class Update:
     """
 
     def __init__(self, update_id: int, message: Message, callback_query: CallbackQuery, **kwargs):
+        self.callback_query = callback_query
         self.kwargs = kwargs
         self.message = message
         self.update_id = update_id
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'Update':
-        message_data = data.pop('message')
-        message = Message.from_dict(message_data)
         try:
-            callback_query_data = data['callback_query']
+            message_data = data.pop('message')
         except KeyError:
-            pass
+            message = None
+        else:
+            message = Message.from_dict(message_data)
+
+        try:
+            callback_query_data = data.pop('callback_query')
+        except KeyError:
+            callback_query = None
         else:
             callback_query = CallbackQuery.from_dict(callback_query_data)
         return cls(message=message, callback_query=callback_query, **data)

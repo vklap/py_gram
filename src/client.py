@@ -72,7 +72,6 @@ class AbstractTelegramClient(abc.ABC):
         }
         if reply_markup:
             data['reply_markup'] = json.dumps(reply_markup.to_dict())
-            # data['reply_markup'] = reply_markup.to_dict()
         result = await self._execute_post(url, data)
         if result['ok'] is True:
             return objects.Message.from_dict(result['result'])
@@ -93,6 +92,26 @@ class AbstractTelegramClient(abc.ABC):
                 updates.append(update)
 
         return updates
+
+    async def answer_callback_query(self, callback_query_id: str, text: str = None, show_alert: bool = None,
+                                    url: str = None, cache_time: int = None) -> Dict:
+        data = {'callback_query_id': callback_query_id}
+        if text:
+            data['text'] = text
+
+        if show_alert is not None:
+            data['show_alert'] = show_alert
+
+        if url:
+            data['url'] = url
+
+        if cache_time is not None:
+            data['cache_time'] = cache_time
+
+        post_url = f'{self._base_url}/answerCallbackQuery'
+        result = await self._execute_post(post_url, data)
+        print('answer callback result:', result)
+        return result
 
     @classmethod
     async def _execute_get(cls, url: str, params: Dict = None) -> Dict:
@@ -120,7 +139,6 @@ class TelegramClient(AbstractTelegramClient):
     def __init__(self, bot_token):
         super().__init__()
         self._bot_token = bot_token
-        self.responded = False
 
     @property
     def bot_token(self) -> str:
@@ -128,6 +146,6 @@ class TelegramClient(AbstractTelegramClient):
 
     async def _handle_update(self, update: objects.Update) -> None:
         print(update)
-        if not self.responded:
-            self.responded = True
-            await self.send_message(chat_id=update.message.chat.id, text='This is a response!')
+        if update.callback_query:
+            await self.answer_callback_query(update.callback_query.id, text='Thank you!', show_alert=True)
+        # await self.send_message(chat_id=update.message.chat.id, text='This is a response!')
