@@ -20,11 +20,11 @@ class ClientError(Exception):
 
 class TelegramClient:
     SENTINEL = object()
-    BASE_URL_FORMAT = 'https://api.telegram.org/bot{token}'
+    BASE_URL_FORMAT = 'https://api.telegram.org/bot{bot_token}'
 
     def __init__(self, bot_token: str = None):
-        self._bot_token = bot_token if bot_token else os.environ['bot_token']
         atexit.register(self.handle_exit)
+        self._bot_token = bot_token if bot_token else os.environ['bot_token']
         self._queue = asyncio.Queue()
         self._message_handlers: List[Callable[['TelegramClient', objects.Message], Awaitable[None]]] = []
         self._command_handlers: DefaultDict[
@@ -62,7 +62,7 @@ class TelegramClient:
 
     @property
     def _base_url(self) -> str:
-        return self.BASE_URL_FORMAT.format(token=self._bot_token)
+        return self.BASE_URL_FORMAT.format(bot_token=self._bot_token)
 
     async def get_me(self) -> Dict:
         url = f'{self._base_url}/getMe'
