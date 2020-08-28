@@ -161,7 +161,8 @@ class TelegramClient:
 
             if command_entities:
                 for entity in command_entities:
-                    command = update.message.text[entity.offset: entity.offset + entity.length]
+                    raw_command = update.message.text[entity.offset: entity.offset + entity.length]
+                    command = raw_command.split('@')[0]
                     await self._handle_command(command, update.message)
             else:
                 await self._handle_message(update.message)
