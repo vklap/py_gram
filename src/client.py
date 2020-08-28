@@ -1,8 +1,9 @@
-from typing import Dict, Union, List
-import abc
+import collections
+from typing import Dict, Union, List, Callable, Awaitable, DefaultDict
 import asyncio
 import atexit
 import json
+import os
 
 import httpx
 
@@ -17,52 +18,51 @@ class ClientError(Exception):
     """
 
 
-class AbstractTelegramClient(abc.ABC):
+class TelegramClient:
     SENTINEL = object()
     BASE_URL_FORMAT = 'https://api.telegram.org/bot{token}'
 
-    def __init__(self):
+    def __init__(self, bot_token: str = None):
+        self._bot_token = bot_token if bot_token else os.environ['bot_token']
         atexit.register(self.handle_exit)
-        self.queue = asyncio.Queue()
-        self.loop = asyncio.get_event_loop()
-        self.event = asyncio.Event()
-        self.listen_task = None
+        self._queue = asyncio.Queue()
+        self._message_handlers: List[Callable[['TelegramClient', objects.Message], Awaitable[None]]] = []
+        self._command_handlers: DefaultDict[
+            str, List[Callable[['TelegramClient', str, objects.Message], Awaitable[None]]]] = collections.defaultdict(
+            list)
+        self._callback_query_handlers: List[Callable[['TelegramClient', objects.CallbackQuery], Awaitable[None]]] = []
+        self._loop = asyncio.get_event_loop()
 
     def handle_exit(self):
-        task = self.loop.create_task(self.queue.put(self.SENTINEL))
-        self.loop.run_until_complete(task)
-        pending = asyncio.all_tasks(loop=self.loop)
+        task = self._loop.create_task(self._queue.put(self.SENTINEL))
+        self._loop.run_until_complete(task)
+        pending = asyncio.all_tasks(loop=self._loop)
         for task in pending:
             task.cancel()
-        group = asyncio.gather(*pending, loop=self.loop, return_exceptions=True)
-        self.loop.run_until_complete(group)
-        self.loop.close()
+        group = asyncio.gather(*pending, loop=self._loop, return_exceptions=True)
+        self._loop.run_until_complete(group)
+        self._loop.close()
 
     def start_listening_for_updates(self):
         asyncio.run(self.start_updates_worker())
 
     async def start_updates_worker(self):
         update = None
-        self.queue.put_nowait(None)
+        self._queue.put_nowait(None)
         while True:
-            update_id = await self.queue.get()
+            update_id = await self._queue.get()
             if update_id == self.SENTINEL:
                 break
             updates = await self.get_updates(update_id)
             for update in updates:
                 await self._receive_update(update)
             update_id = update.update_id + 1 if update else None
-            self.queue.task_done()
-            self.queue.put_nowait(update_id)
-
-    @property
-    @abc.abstractmethod
-    def bot_token(self) -> str:
-        raise NotImplementedError
+            self._queue.task_done()
+            self._queue.put_nowait(update_id)
 
     @property
     def _base_url(self) -> str:
-        return self.BASE_URL_FORMAT.format(token=self.bot_token)
+        return self.BASE_URL_FORMAT.format(token=self._bot_token)
 
     async def get_me(self) -> Dict:
         url = f'{self._base_url}/getMe'
@@ -152,9 +152,13 @@ class AbstractTelegramClient(abc.ABC):
         if update.callback_query:
             await self._handle_callback_query(update.callback_query)
         else:
-            command_entities = [entity
-                                for entity in update.message.entities
-                                if entity.message_entity_type == objects.MessageEntityType.BOT_COMMAND]
+            if update.message.entities:
+                command_entities = [entity
+                                    for entity in update.message.entities
+                                    if entity.message_entity_type == objects.MessageEntityType.BOT_COMMAND]
+            else:
+                command_entities = None
+
             if command_entities:
                 for entity in command_entities:
                     command = update.message.text[entity.offset: entity.offset + entity.length]
@@ -162,38 +166,30 @@ class AbstractTelegramClient(abc.ABC):
             else:
                 await self._handle_message(update.message)
 
-    @abc.abstractmethod
+    def register_command_handler(self, command: str,
+                                 handler: Callable[['TelegramClient', str, objects.Message], Awaitable[None]]) -> None:
+        self._command_handlers[command].append(handler)
+
+    def register_message_handler(self, handler: Callable[['TelegramClient', objects.Message], Awaitable[None]]) -> None:
+        self._message_handlers.append(handler)
+
+    def register_callback_query_handler(self, handler: Callable[
+        ['TelegramClient', objects.CallbackQuery], Awaitable[None]]) -> None:
+        self._callback_query_handlers.append(handler)
+
     async def _handle_message(self, message: objects.Message) -> None:
-        raise NotImplementedError
+        for handler in self._message_handlers:
+            await handler(self, message)
 
-    @abc.abstractmethod
     async def _handle_command(self, command: str, message: objects.Message) -> None:
-        raise NotImplementedError
+        for handler in self._command_handlers[command]:
+            await handler(self, command, message)
 
-    @abc.abstractmethod
     async def _handle_callback_query(self, callback_query: objects.CallbackQuery) -> None:
-        raise NotImplementedError
+        for handler in self._callback_query_handlers:
+            await handler(self, callback_query)
 
     @classmethod
     def _raise_for_error(cls, data: Dict) -> None:
         if not data['ok']:
             raise ClientError(data['description'])
-
-
-class TelegramClient(AbstractTelegramClient):
-    def __init__(self, bot_token):
-        super().__init__()
-        self._bot_token = bot_token
-
-    @property
-    def bot_token(self) -> str:
-        return self._bot_token
-
-    async def _handle_message(self, message: objects.Message) -> None:
-        await self.send_message(message.chat.id, text='This is a response')
-
-    async def _handle_callback_query(self, callback_query: objects.CallbackQuery) -> None:
-        await self.answer_callback_query(callback_query.id, text='Thank you!', show_alert=True)
-
-    async def _handle_command(self, command: str, message: objects.Message) -> None:
-        await self.send_message(message.chat.id, text=f'Got a command {command}')
