@@ -69,7 +69,7 @@ class AbstractTelegramClient(abc.ABC):
         return await self._execute_get(url)
 
     async def send_message(self, chat_id: Union[int, str], text: str,
-                           keyboard_markup: objects.KeyboardMarkup=None) -> objects.Message:
+                           keyboard_markup: objects.KeyboardMarkup = None) -> objects.Message:
         url = f'{self._base_url}/sendMessage'
         data = {
             'chat_id': chat_id,
@@ -152,10 +152,22 @@ class AbstractTelegramClient(abc.ABC):
         if update.callback_query:
             await self._handle_callback_query(update.callback_query)
         else:
-            await self._handle_message(update.message)
+            command_entities = [entity
+                                for entity in update.message.entities
+                                if entity.message_entity_type == objects.MessageEntityType.BOT_COMMAND]
+            if command_entities:
+                for entity in command_entities:
+                    command = update.message.text[entity.offset: entity.offset + entity.length]
+                    await self._handle_command(command, update.message)
+            else:
+                await self._handle_message(update.message)
 
     @abc.abstractmethod
     async def _handle_message(self, message: objects.Message) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def _handle_command(self, command: str, message: objects.Message) -> None:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -169,7 +181,6 @@ class AbstractTelegramClient(abc.ABC):
 
 
 class TelegramClient(AbstractTelegramClient):
-
     def __init__(self, bot_token):
         super().__init__()
         self._bot_token = bot_token
@@ -179,7 +190,10 @@ class TelegramClient(AbstractTelegramClient):
         return self._bot_token
 
     async def _handle_message(self, message: objects.Message) -> None:
-        await self.answer_callback_query(message.chat.id, text='This is a response')
+        await self.send_message(message.chat.id, text='This is a response')
 
     async def _handle_callback_query(self, callback_query: objects.CallbackQuery) -> None:
         await self.answer_callback_query(callback_query.id, text='Thank you!', show_alert=True)
+
+    async def _handle_command(self, command: str, message: objects.Message) -> None:
+        await self.send_message(message.chat.id, text=f'Got a command {command}')

@@ -85,7 +85,7 @@ class MessageEntity:
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'MessageEntity':
-        message_entity_type = MessageEntityType(data.pop('message_entity_type'))
+        message_entity_type = MessageEntityType(data.pop('type'))
         return cls(message_entity_type=message_entity_type, **data)
 
 
@@ -111,11 +111,11 @@ class Message:
         user = User.from_dict(from_user)
         chat = Chat.from_dict(chat_data)
         try:
-            raw_entities = data['entities']
+            raw_entities = data.pop('entities')
         except KeyError:
             entities = None
         else:
-            entities = [MessageEntity(raw_entity) for raw_entity in raw_entities]
+            entities = [MessageEntity.from_dict(raw_entity) for raw_entity in raw_entities]
 
         return cls(from_user=user, chat=chat, entities=entities, **data)
 
