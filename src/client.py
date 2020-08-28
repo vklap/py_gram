@@ -1,9 +1,8 @@
-import json
-from pprint import pprint
 from typing import Dict, Union, List
 import abc
 import asyncio
 import atexit
+import json
 
 import httpx
 
@@ -150,10 +149,17 @@ class AbstractTelegramClient(abc.ABC):
         return response.json()
 
     async def _receive_update(self, update: objects.Update) -> None:
-        asyncio.create_task(self._handle_update(update))
+        if update.callback_query:
+            await self._handle_callback_query(update.callback_query)
+        else:
+            await self._handle_message(update.message)
 
     @abc.abstractmethod
-    async def _handle_update(self, update: objects.Update) -> None:
+    async def _handle_message(self, message: objects.Message) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def _handle_callback_query(self, callback_query: objects.CallbackQuery) -> None:
         raise NotImplementedError
 
     @classmethod
@@ -163,6 +169,7 @@ class AbstractTelegramClient(abc.ABC):
 
 
 class TelegramClient(AbstractTelegramClient):
+
     def __init__(self, bot_token):
         super().__init__()
         self._bot_token = bot_token
@@ -171,8 +178,8 @@ class TelegramClient(AbstractTelegramClient):
     def bot_token(self) -> str:
         return self._bot_token
 
-    async def _handle_update(self, update: objects.Update) -> None:
-        print(update)
-        if update.callback_query:
-            await self.answer_callback_query(update.callback_query.id, text='Thank you!', show_alert=True)
-        # await self.send_message(chat_id=update.message.chat.id, text='This is a response!')
+    async def _handle_message(self, message: objects.Message) -> None:
+        await self.answer_callback_query(message.chat.id, text='This is a response')
+
+    async def _handle_callback_query(self, callback_query: objects.CallbackQuery) -> None:
+        await self.answer_callback_query(callback_query.id, text='Thank you!', show_alert=True)

@@ -70,12 +70,33 @@ class Chat:
         return f'<Chat(id={self.id}, type={self.type}, first_name={self.first_name})>'
 
 
+class MessageEntity:
+    """
+    https://core.telegram.org/bots/api#messageentity
+    """
+    def __init__(self, message_entity_type: MessageEntityType, offset: int, length: int, url: str = None, user: User = None,
+                 language: str = None):
+        self.language = language
+        self.length = length
+        self.offset = offset
+        self.message_entity_type = message_entity_type
+        self.url = url
+        self.user = user
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'MessageEntity':
+        message_entity_type = MessageEntityType(data.pop('message_entity_type'))
+        return cls(message_entity_type=message_entity_type, **data)
+
+
 class Message:
     """
     https://core.telegram.org/bots/api#message
     """
 
-    def __init__(self, message_id: int, from_user: User, date: int, chat: Chat, text: str = None, **kwargs):
+    def __init__(self, message_id: int, from_user: User, date: int, chat: Chat, text: str = None,
+                 entities: List[MessageEntity] = None, **kwargs):
+        self.entities = entities
         self.chat = chat
         self.date = date
         self.from_user = from_user
@@ -89,7 +110,14 @@ class Message:
         chat_data = data.pop('chat')
         user = User.from_dict(from_user)
         chat = Chat.from_dict(chat_data)
-        return cls(from_user=user, chat=chat, **data)
+        try:
+            raw_entities = data['entities']
+        except KeyError:
+            entities = None
+        else:
+            entities = [MessageEntity(raw_entity) for raw_entity in raw_entities]
+
+        return cls(from_user=user, chat=chat, entities=entities, **data)
 
     def __repr__(self):
         return f'<Message(message_id={self.message_id}, text={self.text}, chat={self.chat}, user={self.from_user})>'
