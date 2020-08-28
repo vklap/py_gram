@@ -64,9 +64,11 @@ class TelegramClient:
     def _base_url(self) -> str:
         return self.BASE_URL_FORMAT.format(bot_token=self._bot_token)
 
-    async def get_me(self) -> Dict:
+    async def get_me(self) -> objects.User:
         url = f'{self._base_url}/getMe'
-        return await self._execute_get(url)
+        data = await self._execute_get(url)
+        self._raise_for_error(data)
+        return objects.User.from_dict(data['result'])
 
     async def send_message(self, chat_id: Union[int, str], text: str,
                            keyboard_markup: objects.KeyboardMarkup = None) -> objects.Message:
