@@ -12,6 +12,11 @@ from src import objects
 
 # https://core.telegram.org/bots/api
 
+class ClientError(Exception):
+    """
+    Common Exception raise by the Telegram Client.
+    """
+
 
 class AbstractTelegramClient(abc.ABC):
     SENTINEL = object()
@@ -64,19 +69,38 @@ class AbstractTelegramClient(abc.ABC):
         url = f'{self._base_url}/getMe'
         return await self._execute_get(url)
 
-    async def send_message(self, chat_id: Union[int, str], text: str, reply_markup=None) -> objects.Message:
+    async def send_message(self, chat_id: Union[int, str], text: str,
+                           keyboard_markup: objects.KeyboardMarkup=None) -> objects.Message:
         url = f'{self._base_url}/sendMessage'
         data = {
             'chat_id': chat_id,
             'text': text,
         }
-        if reply_markup:
-            data['reply_markup'] = json.dumps(reply_markup.to_dict())
+        if keyboard_markup:
+            data['reply_markup'] = json.dumps(keyboard_markup.to_dict())
         result = await self._execute_post(url, data)
-        if result['ok'] is True:
-            return objects.Message.from_dict(result['result'])
-        else:
-            raise Exception()
+        self._raise_for_error(result)
+        return objects.Message.from_dict(result['result'])
+
+    async def send_photo_url(self, chat_id: Union[int, str], photo_url: str, caption: str = None,
+                             keyboard_markup: objects.KeyboardMarkup = None, disable_notification: bool = None,
+                             reply_to_message_id: int = None) -> objects.Message:
+        url = f'{self._base_url}/sendPhoto'
+        data = {
+            'chat_id': chat_id,
+            'photo': photo_url,
+        }
+        if caption:
+            data['caption'] = caption[:1024]
+        if disable_notification is not None:
+            data['disable_notification'] = disable_notification
+        if reply_to_message_id is not None:
+            data['reply_to_message_id'] = reply_to_message_id
+        if keyboard_markup:
+            data['reply_markup'] = json.dumps(keyboard_markup.to_dict())
+        result = await self._execute_post(url, data)
+        self._raise_for_error(result)
+        return objects.Message.from_dict(result['result'])
 
     async def get_updates(self, update_id: int = None) -> List[objects.Update]:
         params = {}
@@ -86,11 +110,10 @@ class AbstractTelegramClient(abc.ABC):
         url = f'{self._base_url}/getUpdates'
         data = await self._execute_get(url, params=params)
         updates = []
-        if data['ok'] is True:
-            for result in data['result']:
-                update = objects.Update.from_dict(result)
-                updates.append(update)
-
+        self._raise_for_error(data)
+        for result in data['result']:
+            update = objects.Update.from_dict(result)
+            updates.append(update)
         return updates
 
     async def answer_callback_query(self, callback_query_id: str, text: str = None, show_alert: bool = None,
@@ -110,7 +133,6 @@ class AbstractTelegramClient(abc.ABC):
 
         post_url = f'{self._base_url}/answerCallbackQuery'
         result = await self._execute_post(post_url, data)
-        print('answer callback result:', result)
         return result
 
     @classmethod
@@ -133,6 +155,11 @@ class AbstractTelegramClient(abc.ABC):
     @abc.abstractmethod
     async def _handle_update(self, update: objects.Update) -> None:
         raise NotImplementedError
+
+    @classmethod
+    def _raise_for_error(cls, data: Dict) -> None:
+        if not data['ok']:
+            raise ClientError(data['description'])
 
 
 class TelegramClient(AbstractTelegramClient):

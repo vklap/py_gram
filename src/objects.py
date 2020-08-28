@@ -176,7 +176,13 @@ class InlineKeyboardButton:
         return data
 
 
-class InlineKeyboardMarkup:
+class KeyboardMarkup(abc.ABC):
+    @abc.abstractmethod
+    def to_dict(self) -> Dict:
+        raise NotImplementedError
+
+
+class InlineKeyboardMarkup(KeyboardMarkup):
     def __init__(self, inline_keyboard: List[InlineKeyboardButton]):
         self.inline_keyboard = inline_keyboard if inline_keyboard else []
 
@@ -185,4 +191,3 @@ class InlineKeyboardMarkup:
 
     def to_dict(self) -> Dict:
         return {'inline_keyboard': [[button.to_dict() for button in self.inline_keyboard]]}
-        # return [button.to_dict() for button in self.inline_keyboard]
