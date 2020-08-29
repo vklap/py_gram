@@ -137,7 +137,8 @@ class TelegramClient:
 
         post_url = f'{self._base_url}/answerCallbackQuery'
         result = await self._execute_post(post_url, data)
-        return result
+        self._raise_for_error(result)
+        return result['result']
 
     @classmethod
     async def _execute_get(cls, url: str, params: Dict = None) -> Dict:

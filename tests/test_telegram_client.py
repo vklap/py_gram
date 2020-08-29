@@ -237,3 +237,23 @@ class TestTelegramClient:
                                              disable_notification=False, reply_to_message_id=message_id)
 
         assert result.message_id == message_id
+
+    @pytest.mark.asyncio
+    async def test_answer_callback_query(self, client, httpx_mock: HTTPXMock):
+        response = {
+            'ok': True,
+            'result': True,
+        }
+
+        url = f'{self.BASE_URL}/answerCallbackQuery'
+        httpx_mock.add_response(url=url, json=response)
+
+        result = await client.answer_callback_query(
+            callback_query_id=1,
+            text='some text',
+            show_alert=True,
+            url='https://a-url',
+            cache_time=1,
+        )
+
+        assert result is True
