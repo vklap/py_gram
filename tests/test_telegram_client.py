@@ -103,7 +103,7 @@ class TestTelegramClient:
 
         handled_message: objects.Message = None
 
-        def message_handler(c: TelegramClient, msg: objects.Message) -> None:
+        async def message_handler(c: TelegramClient, msg: objects.Message) -> None:
             nonlocal handled_message
             handled_message = msg
 
@@ -113,3 +113,62 @@ class TestTelegramClient:
         thread.join()
 
         assert handled_message.message_id == message.message_id
+
+    @pytest.mark.asyncio
+    async def test_start_listening_for_updates_for_command(self, client, httpx_mock: HTTPXMock):
+        command_name = '/my_command'
+        command_text = f'{command_name}@SuperBot'
+        user = objects.User(id=1, is_bot=True, first_name='SuperBot')
+        chat = objects.Chat(id=1965, chat_type=objects.ChatType.PRIVATE, first_name='John', last_name='Doe')
+        message_entity = objects.MessageEntity(
+            message_entity_type=objects.MessageEntityType.BOT_COMMAND,
+            offset=0,
+            length=len(command_name),
+
+        )
+        message = objects.Message(message_id=506, from_user=user, date=int(datetime.utcnow().timestamp()), chat=chat,
+                                  entities=[message_entity], text=f'{command_text} whatever')
+        update = objects.Update(update_id=88, message=message)
+        response = {
+            'ok': True,
+            'result': [{
+                'update_id': update.update_id,
+                'message': {
+                    'message_id': message.message_id,
+                    'date': message.date,
+                    'from': {'id': user.id, 'is_bot': True, 'first_name': user.first_name},
+                    'chat': {
+                        'id': chat.id,
+                        'type': chat.chat_type.value,
+                        'first_name': chat.first_name,
+                        'last_name': chat.last_name,
+                    },
+                    'entities': [{
+                        'type': message_entity.message_entity_type.value,
+                        'offset': message_entity.offset,
+                        'length': message_entity.length,
+                    }],
+                    'text': f'{command_text} whatever',
+                },
+            }],
+        }
+
+        url = f'{self.BASE_URL}/getUpdates'
+        httpx_mock.add_response(url=url, json=response)
+
+        handled_message: objects.Message = None
+        handled_command: str = None
+
+        async def command_handler(c: TelegramClient, cmd: str, msg: objects.Message) -> None:
+            nonlocal handled_message
+            nonlocal handled_command
+            handled_command = cmd
+            handled_message = msg
+
+        client.register_command_handler(command_name, command_handler)
+        thread = threading.Thread(target=client.start_listening_for_updates)
+        thread.start()
+        thread.join()
+
+        assert handled_message.message_id == message.message_id
+        assert handled_command == command_name
