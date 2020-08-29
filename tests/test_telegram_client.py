@@ -186,3 +186,54 @@ class TestTelegramClient:
         assert handled_callback.message.message_id == update.callback_query.message.message_id
         assert handled_callback.from_user.id == update.callback_query.from_user.id
 
+    @pytest.mark.asyncio
+    async def test_send_message(self, client, httpx_mock: HTTPXMock):
+        message_id = 566
+        chat_id = 88
+        response = {
+            'ok': True,
+            'result': {
+                'message_id': message_id,
+                'date': datetime.utcnow().timestamp(),
+                'chat': {'id': chat_id, 'type': objects.ChatType.PRIVATE.value},
+                'from': {'id': 1962, 'is_bot': True, 'first_name': 'TheBot'}
+            },
+        }
+
+        url = f'{self.BASE_URL}/sendMessage'
+        httpx_mock.add_response(url=url, json=response)
+
+        keyboard_markup = objects.InlineKeyboardMarkup([
+            objects.InlineKeyboardButton(text='a text', callback_data='callback data', url='https://some-url'),
+        ])
+
+        result = await client.send_message(chat_id, text='some text', keyboard_markup=keyboard_markup)
+
+        assert result.message_id == message_id
+
+    @pytest.mark.asyncio
+    async def test_send_photo_url(self, client, httpx_mock: HTTPXMock):
+        photo_url = 'https://photo_url'
+        message_id = 566
+        chat_id = 88
+        response = {
+            'ok': True,
+            'result': {
+                'message_id': message_id,
+                'date': datetime.utcnow().timestamp(),
+                'chat': {'id': chat_id, 'type': objects.ChatType.PRIVATE.value},
+                'from': {'id': 1962, 'is_bot': True, 'first_name': 'TheBot'}
+            },
+        }
+
+        url = f'{self.BASE_URL}/sendPhoto'
+        httpx_mock.add_response(url=url, json=response)
+
+        keyboard_markup = objects.InlineKeyboardMarkup([
+            objects.InlineKeyboardButton(text='a text', callback_data='callback data', url='https://some-url'),
+        ])
+        caption = 'a' * 2_000
+        result = await client.send_photo_url(chat_id, photo_url, caption, keyboard_markup=keyboard_markup,
+                                             disable_notification=False, reply_to_message_id=message_id)
+
+        assert result.message_id == message_id

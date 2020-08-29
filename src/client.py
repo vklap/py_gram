@@ -179,8 +179,8 @@ class TelegramClient:
     def register_message_handler(self, handler: Callable[['TelegramClient', objects.Message], Awaitable[None]]) -> None:
         self._message_handlers.append(handler)
 
-    def register_callback_query_handler(self, handler: Callable[
-        ['TelegramClient', objects.CallbackQuery], Awaitable[None]]) -> None:
+    def register_callback_query_handler(self, handler: Callable[['TelegramClient', objects.CallbackQuery],
+                                                                Awaitable[None]]) -> None:
         self._callback_query_handlers.append(handler)
 
     async def _handle_message(self, message: objects.Message) -> None:
