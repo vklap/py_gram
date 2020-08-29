@@ -1,6 +1,7 @@
+from datetime import datetime
+
 from pytest_httpx import HTTPXMock
 import pytest
-import pytest_asyncio
 
 from src import objects
 from src.client import ClientError
@@ -45,3 +46,30 @@ class TestTelegramClient:
             await client.get_me()
 
         assert str(e.value) == error_description
+
+    @pytest.mark.asyncio
+    async def test_get_updates(self, client, httpx_mock: HTTPXMock):
+        user = objects.User(id=1, is_bot=True, first_name='SuperBot')
+        chat = objects.Chat(id=1965, chat_type=objects.ChatType.PRIVATE, first_name='John', last_name='Doe')
+        message = objects.Message(message_id=506, from_user=user, date=int(datetime.utcnow().timestamp()), chat=chat)
+        update = objects.Update(update_id=88, message=message)
+        response = {
+            'ok': True,
+            'result': [{
+                'update_id': update.update_id,
+                'message': {
+                    'message_id': message.message_id,
+                    'date': message.date,
+                    'from': {'id': user.id, 'is_bot': True, 'first_name': user.first_name},
+                    'chat': {'id': chat.id, 'type': chat.chat_type.value, 'first_name': chat.first_name, 'last_name': chat.last_name},
+                },
+            }],
+        }
+        url = f'{self.BASE_URL}/getUpdates?offset={update.update_id}'
+        httpx_mock.add_response(url=url, json=response)
+
+        result = await client.get_updates(update.update_id)
+
+        assert len(result) == 1
+        received_update = result[0]
+        assert received_update.update_id == update.update_id

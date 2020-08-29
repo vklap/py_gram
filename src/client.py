@@ -25,13 +25,13 @@ class TelegramClient:
     def __init__(self, bot_token: str = None):
         atexit.register(self.handle_exit)
         self._bot_token = bot_token if bot_token else os.environ['bot_token']
-        self._queue = asyncio.Queue()
+        self._loop = asyncio.get_event_loop()
+        self._queue = asyncio.Queue(loop=self._loop)
         self._message_handlers: List[Callable[['TelegramClient', objects.Message], Awaitable[None]]] = []
         self._command_handlers: DefaultDict[
             str, List[Callable[['TelegramClient', str, objects.Message], Awaitable[None]]]] = collections.defaultdict(
             list)
         self._callback_query_handlers: List[Callable[['TelegramClient', objects.CallbackQuery], Awaitable[None]]] = []
-        self._loop = asyncio.get_event_loop()
 
     def handle_exit(self):
         task = self._loop.create_task(self._queue.put(self.SENTINEL))

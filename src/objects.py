@@ -55,16 +55,17 @@ class Chat:
     https://core.telegram.org/bots/api#chat
     """
 
-    def __init__(self, id: int, type: str, first_name: str = None, last_name: str = None, **kwargs):
+    def __init__(self, id: int, chat_type: ChatType, first_name: str = None, last_name: str = None, **kwargs):
         self.first_name = first_name
         self.id = id
         self.kwargs = kwargs
         self.last_name = last_name
-        self.type = type
+        self.chat_type = chat_type
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'Chat':
-        return cls(**data)
+        chat_type = ChatType(data.pop('type'))
+        return cls(chat_type=chat_type, **data)
 
     def __repr__(self):
         return f'<Chat(id={self.id}, type={self.type}, first_name={self.first_name})>'
@@ -159,7 +160,7 @@ class Update:
     https://core.telegram.org/bots/api#update
     """
 
-    def __init__(self, update_id: int, message: Message, callback_query: CallbackQuery, **kwargs):
+    def __init__(self, update_id: int, message: Message = None, callback_query: CallbackQuery = None, **kwargs):
         self.callback_query = callback_query
         self.kwargs = kwargs
         self.message = message
