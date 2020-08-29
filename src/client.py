@@ -47,18 +47,21 @@ class TelegramClient:
         asyncio.run(self.start_updates_worker())
 
     async def start_updates_worker(self):
-        update = None
-        self._queue.put_nowait(None)
-        while True:
-            update_id = await self._queue.get()
-            if update_id == self.SENTINEL:
-                break
-            updates = await self.get_updates(update_id)
-            for update in updates:
-                await self._receive_update(update)
-            update_id = update.update_id + 1 if update else None
-            self._queue.task_done()
-            self._queue.put_nowait(update_id)
+        try:
+            update = None
+            self._queue.put_nowait(None)
+            while True:
+                update_id = await self._queue.get()
+                if update_id == self.SENTINEL:
+                    break
+                updates = await self.get_updates(update_id)
+                for update in updates:
+                    await self._receive_update(update)
+                update_id = update.update_id + 1 if update else None
+                self._queue.task_done()
+                self._queue.put_nowait(update_id)
+        except asyncio.CancelledError:
+            pass
 
     @property
     def _base_url(self) -> str:
