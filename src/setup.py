@@ -19,7 +19,7 @@ def get_long_description(filename):
 
 
 setup(
-    name='py_gram',
+    name='telegramio',
     packages=find_packages(exclude=['tests']),
     version=__version__,
     description='Simple and Limited async Telegram Client',
