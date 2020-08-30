@@ -28,10 +28,6 @@ jobs:
     executor: python/default
     steps:
       - checkout
-      - run:
-          name: "echo an env var that is part of our project"
-          command: |
-            echo $MY_NAME
       - attach_workspace:
           at: dist
       - run:
@@ -43,7 +39,7 @@ workflows:
     jobs:
       - build-and-test
       - pypi:
-#          context: pypi
+          context: pypi
           requires:
             - build-and-test
           filters:
