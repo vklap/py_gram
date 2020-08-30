@@ -31,7 +31,7 @@ jobs:
       - run:
           name: "echo an env var that is part of our project"
           command: |
-            echo PYPI_USERNAME
+            echo $PYPI_USERNAME
       - attach_workspace:
           at: dist
       - run:
