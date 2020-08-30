@@ -2,6 +2,8 @@
 
 set -e
 
+echo PYPI_USERNAME="$PYPI_USERNAME"
+
 PYPI_CONFIG="${HOME}/.pypirc"
 pip install --upgrade pip
 pip install twine
