@@ -1,13 +1,12 @@
-import collections
 from typing import Dict, Union, List, Callable, Awaitable, DefaultDict
 import asyncio
-import atexit
+import collections
 import json
-import os
+import signal
 
 import httpx
 
-from src import objects
+from py_gram import objects
 
 
 # https://core.telegram.org/bots/api
@@ -19,41 +18,42 @@ class ClientError(Exception):
 
 
 class TelegramClient:
-    SENTINEL = object()
     BASE_URL_FORMAT = 'https://api.telegram.org/bot{bot_token}'
 
-    def __init__(self, bot_token: str = None):
-        atexit.register(self.handle_exit)
-        self._bot_token = bot_token if bot_token else os.environ['bot_token']
-        self._loop = asyncio.get_event_loop()
-        self._queue = asyncio.Queue(loop=self._loop)
+    def __init__(self, bot_token: str):
+        self._bot_token = bot_token
         self._message_handlers: List[Callable[['TelegramClient', objects.Message], Awaitable[None]]] = []
         self._command_handlers: DefaultDict[
             str, List[Callable[['TelegramClient', str, objects.Message], Awaitable[None]]]] = collections.defaultdict(
             list)
         self._callback_query_handlers: List[Callable[['TelegramClient', objects.CallbackQuery], Awaitable[None]]] = []
+        self._queue = asyncio.Queue()
+        self._listening = False
 
-    def handle_exit(self):
-        task = self._loop.create_task(self._queue.put(self.SENTINEL))
-        self._loop.run_until_complete(task)
-        pending = asyncio.all_tasks(loop=self._loop)
+    def _handle_signal(self, sig: int) -> None:
+        loop = asyncio.get_running_loop()
+        pending = asyncio.all_tasks(loop=loop)
         for task in pending:
             task.cancel()
-        group = asyncio.gather(*pending, loop=self._loop, return_exceptions=True)
-        self._loop.run_until_complete(group)
-        self._loop.close()
+
+        # prevent _handle_signal from being called a second time
+        loop.remove_signal_handler(signal.SIGTERM)
+        # make '<ctrl> + c' do nothing (empty lambda)
+        loop.add_signal_handler(signal.SIGINT, lambda: None)
 
     def start_listening_for_updates(self):
         asyncio.run(self.start_updates_worker())
 
     async def start_updates_worker(self):
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, self._handle_signal, sig)
+
         try:
             update = None
             self._queue.put_nowait(None)
             while True:
                 update_id = await self._queue.get()
-                if update_id == self.SENTINEL:
-                    break
                 updates = await self.get_updates(update_id)
                 for update in updates:
                     await self._receive_update(update)

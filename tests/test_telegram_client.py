@@ -1,13 +1,18 @@
 from datetime import datetime
 from typing import Tuple, Dict
+import asyncio
+import os
+import signal
 import threading
 
+
 from pytest_httpx import HTTPXMock
+import httpx
 import pytest
 
-from src import objects
-from src.client import ClientError
-from src.client import TelegramClient
+from py_gram import objects
+from py_gram import ClientError
+from py_gram import TelegramClient
 
 
 class TestTelegramClient:
@@ -71,9 +76,12 @@ class TestTelegramClient:
 
     @pytest.fixture
     def client(self) -> TelegramClient:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         client = TelegramClient(self.BOT_TOKEN)
         yield client
-        client.handle_exit()
+        # os.kill(os.getpid(), signal.SIGTERM)
+        loop.stop()
 
     @pytest.mark.asyncio
     async def test_get_me(self, client, httpx_mock: HTTPXMock):
@@ -121,8 +129,7 @@ class TestTelegramClient:
         assert received_update.message.chat.id == update.message.chat.id
         assert received_update.message.chat.chat_type == update.message.chat.chat_type
 
-    @pytest.mark.asyncio
-    async def test_start_listening_for_updates_for_message(self, client, httpx_mock: HTTPXMock):
+    def test_start_listening_for_updates_for_message(self, client, httpx_mock: HTTPXMock):
         response, update = self._create_response_for_update()
         url = f'{self.BASE_URL}/getUpdates'
         httpx_mock.add_response(url=url, json=response)
@@ -134,14 +141,14 @@ class TestTelegramClient:
             handled_message = msg
 
         client.register_message_handler(message_handler)
-        thread = threading.Thread(target=client.start_listening_for_updates)
-        thread.start()
-        thread.join()
+        try:
+            client.start_listening_for_updates()
+        except httpx.TimeoutException:
+            pass
 
         assert handled_message.message_id == update.message.message_id
 
-    @pytest.mark.asyncio
-    async def test_start_listening_for_updates_for_command(self, client, httpx_mock: HTTPXMock):
+    def test_start_listening_for_updates_for_command(self, client, httpx_mock: HTTPXMock):
         command_name = '/my_command'
         response, update = self._create_response_for_update(command_name)
         url = f'{self.BASE_URL}/getUpdates'
@@ -157,15 +164,15 @@ class TestTelegramClient:
             handled_message = msg
 
         client.register_command_handler(command_name, command_handler)
-        thread = threading.Thread(target=client.start_listening_for_updates)
-        thread.start()
-        thread.join()
+        try:
+            client.start_listening_for_updates()
+        except httpx.TimeoutException:
+            pass
 
         assert handled_message.message_id == update.message.message_id
         assert handled_command == command_name
 
-    @pytest.mark.asyncio
-    async def test_start_listening_for_updates_for_callback_query(self, client, httpx_mock: HTTPXMock):
+    def test_start_listening_for_updates_for_callback_query(self, client, httpx_mock: HTTPXMock):
         response, update = self._create_response_for_update(is_callback_query=True)
         url = f'{self.BASE_URL}/getUpdates'
         httpx_mock.add_response(url=url, json=response)
@@ -177,9 +184,10 @@ class TestTelegramClient:
             handled_callback = callback
 
         client.register_callback_query_handler(callback_query_handler)
-        thread = threading.Thread(target=client.start_listening_for_updates)
-        thread.start()
-        thread.join()
+        try:
+            client.start_listening_for_updates()
+        except httpx.TimeoutException:
+            pass
 
         assert handled_callback.id == update.callback_query.id
         assert handled_callback.data == update.callback_query.data

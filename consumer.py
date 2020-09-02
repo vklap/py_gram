@@ -2,8 +2,8 @@ import os
 
 import dotenv
 
-from src import objects
-from src.client import TelegramClient
+from py_gram import objects
+from py_gram.client import TelegramClient
 
 
 async def handle_message(client: TelegramClient, message: objects.Message) -> None:
@@ -25,5 +25,5 @@ if __name__ == '__main__':
     telegram_client.register_command_handler('/sudo', handle_command)
     telegram_client.register_message_handler(handle_message)
     telegram_client.register_callback_query_handler(handle_callback_query)
+    print('start listening for updates...')
     telegram_client.start_listening_for_updates()
-    print('started listening...')
